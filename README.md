@@ -1,208 +1,199 @@
-# Road Accident Hotspot Detection 🚦📍
+# HotspotWatch: Real-Time Road Accident Hotspot Detection & Predictive Intelligence Platform 🚦📍
 
-[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-brightgreen?logo=github)](https://lokeshpuma.github.io/Road-Accident-Hotspot-Detection/)
-[![Hadoop](https://img.shields.io/badge/Apache%20Hadoop-3.3.6-yellow?logo=apachehadoop)](https://hadoop.apache.org/)
-[![Kafka](https://img.shields.io/badge/Apache%20Kafka-3.7.0-black?logo=apachekafka)](https://kafka.apache.org/)
-[![Java](https://img.shields.io/badge/Java-8%20%2F%20Maven-red?logo=openjdk)](https://www.java.com/)
-[![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)](https://www.python.org/)
-[![Folium](https://img.shields.io/badge/Leaflet%20%2F%20Folium-Heatmap-green)](https://python-visualization.github.io/folium/)
+[![Docker Compose](https://img.shields.io/badge/Docker-Containers%20Active-blue?logo=docker)](https://www.docker.com/)
+[![Apache Hadoop](https://img.shields.io/badge/Apache%20Hadoop-3.3.6%20YARN-yellow?logo=apachehadoop)](https://hadoop.apache.org/)
+[![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-3.7.0-black?logo=apachekafka)](https://kafka.apache.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110-teal?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18%20Vite-61dafb?logo=react)](https://react.dev/)
+[![Leaflet](https://img.shields.io/badge/Leaflet-Geospatial%20GIS-green?logo=leaflet)](https://leafletjs.com/)
 
-An end-to-end Big Data streaming and batch processing pipeline that ingests, deduplicates, scores, aggregates, and visualizes road collision hotspots using **Apache Kafka**, **Hadoop HDFS**, **YARN MapReduce**, and an interactive **Leaflet/Folium geospatial heatmap**.
-
-🔗 **Live Interactive Heatmap**: [https://lokeshpuma.github.io/Road-Accident-Hotspot-Detection/](https://lokeshpuma.github.io/Road-Accident-Hotspot-Detection/)
+An enterprise-grade **Big Data Lambda Architecture platform** for real-time and historical road safety analytics. The system ingests, deduplicates, scores, ranks, and predicts road accident concentration hotspots across Great Britain using **Apache Kafka**, **Hadoop HDFS**, **YARN MapReduce**, and a **React 18 / FastAPI interactive spatial dashboard**.
 
 ---
 
-## 📌 1. Overview & Problem Statement
+## 📌 1. Project Overview & Academic Problem Statement
 
-Traffic safety authorities traditionally allocate enforcement and preventative patrols based on **annual reports**, which are months out of date and hide *when* and *where* risk is concentrated.
+Traditional traffic enforcement and road casualty interventions rely on **retrospective annual casualty reports**, which are published months after collisions occur. These reports obscure *when* (diurnal peaks) and *where* (localized micro-corridors) collision risks are highest.
 
-This project delivers a production-grade architecture that:
-1. **Ingests** collision reports in near real-time as JSON events into **Kafka**.
-2. **Persists** events onto **HDFS** partitioned by event date (`/data/stats19/raw/dt=YYYY-MM-DD/`) with atomic rename commits.
-3. **Executes** a daily 3-stage **Hadoop MapReduce** chain on **YARN** ranking the **Top 20 accident hotspots** over a **rolling 90-day window**.
-4. **Visualizes** hotspots on an interactive **geospatial heatmap** featuring time-band toggle layers and ranked markers detailing collision severity distributions.
-5. **Validates** cluster accuracy and scoring against an independent pandas baseline.
+**HotspotWatch** solves this by implementing a dual **Lambda Architecture**:
+1. **Batch Layer (Hadoop & MapReduce)**: Executes a 3-stage MapReduce chain computing spatio-temporal hotspot clusters over a rolling 90-day window with mathematical recency decay and casualty severity weighting.
+2. **Speed Layer (Apache Kafka & SSE)**: Ingests streaming STATS19 accident reports in real time, advancing an interactive virtual clock and updating active top-of-stack live telemetry.
+3. **Serving & Analytics Layer (FastAPI & React)**: Visualizes hotspots via interactive GIS heatmaps, Uber H3 hexagonal binning, 7-day Poisson machine learning risk forecasts, UK DfT WebTAG casualty economic appraisal, and patrol dispatch optimization.
 
 ---
 
-## 🏗️ 2. Architecture
+## 🏗️ 2. System Architecture
 
 ```text
-                 ┌──────────────┐   JSON events   ┌────────────────────┐
- STATS19 CSV ───►│ producer.py  │────────────────►│ Kafka topic         │
- (replay by day) │ (Python)     │ key=collision_id│ accident-reports    │
-                 └──────────────┘                 │ 6 partitions        │
-                                                  └─────────┬──────────┘
-                                                            │ consumer group "hdfs-sink"
-                                                            ▼
-                                                  ┌────────────────────┐
-                                                  │ hdfs_sink.py       │ commit offsets after write
-                                                  └─────────┬──────────┘
-                                                            ▼  WebHDFS
-   HDFS  /data/stats19/raw/dt=2025-12-31/p3-o…-….tsv   (partitioned by event date)
-                                                            │ rolling 90 dt= folders
-                                                            ▼
-   ┌──────────────────────── MapReduce on YARN (daily, asof = D) ───────────────────────┐
-   │ Job 1  DedupScore : filter window → key=collision_id → 1 record → cell|band + score │
-   │ Job 2  Aggregate  : key=cell|band (+combiner) → score, n, centroid, severity mix    │
-   │ Job 3  TopN       : per-mapper min-heap top-20 → 1 reducer → global top-20          │
-   └──────────────────────────────────────────┬─────────────────────────────────────────┘
-                                              ▼
-   HDFS /data/stats19/output/asof=D/{cells,top20}
-                                              ▼
-                              heatmap.py (Folium HeatMap + ranked markers)
-                                              ▼
-                         site/index.html  +  site/top20.csv   (GitHub Pages)
+ ┌─────────────────────────────────────────────────────────────────────────────────────────┐
+ │                                   INGESTION & STREAMING                                 │
+ │  STATS19 Dataset ───► Ingestion Producer ───► Apache Kafka Topic: accident-reports       │
+ └───────────────────────────────┬──────────────────────────┬──────────────────────────────┘
+                                 │                          │
+                 ┌───────────────▼───────────────┐          │
+                 │          BATCH LAYER          │          │
+                 │   HDFS Sink (WebHDFS)         │          │
+                 │   /data/stats19/raw/dt=YYYY/  │          │
+                 └───────────────┬───────────────┘          │
+                                 │                          │
+                 ┌───────────────▼───────────────┐          │
+                 │       YARN MapReduce Chain    │          │
+                 │  Job 1: Window & DedupScore   │          │
+                 │  Job 2: Centroid & Aggregate  │          │
+                 │  Job 3: Global Top-N Rank     │          │
+                 └───────────────┬───────────────┘          │
+                                 │                          │
+                 ┌───────────────▼───────────────┐          │
+                 │      HDFS Output Partials     │          │
+                 │   /data/stats19/output/asof/  │          │
+                 └───────────────┬───────────────┘          │
+                                 │                          │
+                                 ▼                          ▼
+ ┌─────────────────────────────────────────────────────────────────────────────────────────┐
+ │                           SERVING LAYER (FastAPI Backend)                               │
+ │   • Real-Time Server-Sent Events (SSE) Broadcast (/api/v1/stream)                       │
+ │   • 7-Day Poisson ML Risk Forecasting Engine (/api/v1/forecast)                         │
+ │   • UK DfT WebTAG Economic Valuation & PCC PDF Generator (/api/v1/economics)           │
+ │   • Maximum Coverage Location Problem (MCLP) Patrol Optimizer (/api/v1/patrol)          │
+ │   • Uber H3 Hexagonal Spatial Indexer (Resolution 8) (/api/v1/h3)                       │
+ │   • OpenStreetMap Road Snapping & XAI Diagnostic Cards (/api/v1/osm, /api/v1/diagnostics)│
+ └───────────────────────────────────────────────┬─────────────────────────────────────────┘
+                                                 │
+                                                 ▼
+ ┌─────────────────────────────────────────────────────────────────────────────────────────┐
+ │                       PRESENTATION LAYER (React 18 Vite SPA)                            │
+ │   • Interactive Leaflet GIS Heatmap with Dynamic Normalization & Time-Band Filters      │
+ │   • Real-Time Live Ingest Telemetry Table (Top-of-Stack Row Insertion & Flash Updates) │
+ │   • Executive PCC Business Case PDF Export & In-Car GPS Waypoint GPX Downloads          │
+ │   • Responsive Dark / Light Mode with Glassmorphism Aesthetic                           │
+ └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📊 3. Dataset & Hotspot Methodology
+## 📊 3. Core Methodology & Mathematical Formulations
 
-The project analyzes the official **UK Road Safety (STATS19)** collision dataset spanning 2021–2025 (513,801 total collisions).
-
-**Dataset Link**:- [UK Road Safety (STATS19)](https://www.gov.uk/government/statistical-data-sets/road-safety-open-data)
-
-### Spatial & Temporal Clustering
-- **Spatial Grid Resolution**: $0.02^\circ \times 0.02^\circ$ latitude/longitude cells ($\approx 2.2\text{ km} \times 1.3\text{ km}$).
+### 3.1 Spatio-Temporal Discretization
+- **Spatial Grid Cell**: Coordinates are partitioned into a uniform $0.02^\circ \times 0.02^\circ$ latitude/longitude bounding box ($\approx 2.2\text{ km} \times 1.3\text{ km}$ at UK latitudes):
+  $$\text{Cell ID} = \lfloor \text{lat} / 0.02 \rfloor : \lfloor \text{lon} / 0.02 \rfloor$$
 - **Diurnal Time Bands**:
-  - `AM_PEAK`: 07:00 – 09:59
-  - `DAY`: 05:00 – 06:59 & 10:00 – 15:59
-  - `PM_PEAK`: 16:00 – 18:59
-  - `NIGHT`: 19:00 – 04:59
+  - `AM_PEAK`: 07:00 – 09:59 (Morning rush commuter conflict)
+  - `DAY`: 10:00 – 15:59 & 05:00 – 06:59 (Off-peak mixed traffic)
+  - `PM_PEAK`: 16:00 – 18:59 (Evening peak congestion)
+  - `NIGHT`: 19:00 – 04:59 (Low-light, speeding, alcohol vulnerability)
 
-### Recency & Severity Scoring Model
-Each collision event receives an exponential recency decay score weighted by collision injury severity:
+### 3.2 Exponential Recency Decay & Severity Weighting
+Each collision event within the rolling 90-day window ($0 \le \text{age} < 90$) is assigned a decayed severity weight:
 
-$$\text{score} = \text{severity\_weight} \times 0.5^{\frac{\text{age\_days}}{\text{half\_life}}}$$
+$$\text{Score} = \sum_{i=1}^{N} W(\text{severity}_i) \times 0.5^{\frac{\text{age\_days}_i}{\lambda}}$$
 
-- **Severity Weights**: Fatal (`1`) = 10, Serious (`2`) = 5, Slight (`3`) = 1
-- **Half-Life ($\lambda$)**: 30 days
-- **Rolling Window**: 90 days ending on `asof` date ($0 \le \text{age} < 90$)
+- **Severity Weights ($W$)**:
+  - Fatal Collision (`Severity 1`): **$10.0$**
+  - Serious Injury Collision (`Severity 2`): **$5.0$**
+  - Slight Collision (`Severity 3`): **$1.0$**
+- **Half-Life ($\lambda$)**: **$30\text{ days}$** (collisions occurring 30 days ago carry 50% weight; 60 days carry 25%).
 
----
+### 3.3 7-Day Poisson ML Risk Forecasting
+Collision count arrivals at high-risk corridors follow a Poisson stochastic process. The forward 7-day expected incident intensity $\hat{\lambda}_{t+k}$ is modeled via historical band frequency and day-of-week seasonality:
 
-## 🏆 4. Top 20 Hotspots (As of 2025-12-31)
+$$P(Y = k) = \frac{\lambda^k e^{-\lambda}}{k!}, \quad \text{Risk Index} = \frac{\hat{\lambda} \times \bar{W}_{\text{hist}}}{\max(\text{baseline})}$$
 
-| Rank | Grid Cell | Time Band | Score | Collisions | Centroid Lat | Centroid Lon | Fatal | Serious | Slight |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | `2575:-7` | `DAY` | 24.8265 | 24 | 51.510653 | -0.130075 | 1 | 8 | 15 |
-| **2** | `2575:-8` | `DAY` | 22.1397 | 19 | 51.511545 | -0.150444 | 0 | 7 | 12 |
-| **3** | `2575:-8` | `NIGHT` | 19.6665 | 24 | 51.509444 | -0.147490 | 0 | 5 | 19 |
-| **4** | `2576:-6` | `NIGHT` | 18.8486 | 13 | 51.528532 | -0.109176 | 0 | 6 | 7 |
-| **5** | `2573:-2` | `DAY` | 16.8453 | 16 | 51.471811 | -0.030681 | 0 | 4 | 12 |
-| **6** | `2575:-7` | `NIGHT` | 16.5332 | 29 | 51.511850 | -0.129820 | 0 | 3 | 26 |
-| **7** | `2574:-4` | `DAY` | 15.8611 | 10 | 51.488555 | -0.071392 | 1 | 5 | 4 |
-| **8** | `2575:0` | `NIGHT` | 15.3573 | 12 | 51.512154 | 0.008854 | 0 | 2 | 10 |
-| **9** | `2575:-4` | `NIGHT` | 15.2716 | 12 | 51.510260 | -0.070678 | 0 | 4 | 8 |
-| **10** | `2673:-112` | `NIGHT` | 15.2592 | 10 | 53.471561 | -2.231335 | 1 | 4 | 5 |
-| **11** | `2574:-9` | `DAY` | 15.0556 | 13 | 51.492270 | -0.167772 | 0 | 6 | 7 |
-| **12** | `2673:-113` | `NIGHT` | 14.5150 | 10 | 53.472863 | -2.251792 | 1 | 2 | 7 |
-| **13** | `2576:-5` | `NIGHT` | 14.2357 | 18 | 51.528593 | -0.086710 | 0 | 4 | 14 |
-| **14** | `2648:-59` | `PM_PEAK` | 14.0712 | 6 | 52.967287 | -1.169418 | 0 | 4 | 2 |
-| **15** | `2674:-113` | `DAY` | 13.7540 | 6 | 53.491070 | -2.249950 | 0 | 4 | 2 |
-| **16** | `2569:-6` | `PM_PEAK` | 13.5113 | 13 | 51.389290 | -0.107832 | 0 | 3 | 10 |
-| **17** | `2575:-3` | `NIGHT` | 13.4816 | 19 | 51.511271 | -0.053421 | 0 | 4 | 15 |
-| **18** | `2576:-4` | `NIGHT` | 13.2063 | 16 | 51.527135 | -0.072613 | 0 | 4 | 12 |
-| **19** | `2541:-7` | `DAY` | 13.0193 | 15 | 50.829393 | -0.132838 | 0 | 4 | 11 |
-| **20** | `2687:-18` | `DAY` | 12.9812 | 13 | 53.748345 | -0.351138 | 0 | 3 | 10 |
+### 3.4 UK DfT WebTAG Economic Valuation Engine
+Societal casualty appraisals follow the official **UK Department for Transport (DfT) WebTAG** unit valuation criteria:
+- **Fatal Casualty**: **£2,250,000**
+- **Serious Casualty**: **£253,000**
+- **Slight Casualty**: **£19,500**
+
+**Benefit-to-Cost Ratio (BCR)**:
+$$\text{Gross Societal Savings} = \text{Baseline Casualty Loss} \times \text{Target Crash Reduction \%}$$
+$$\text{BCR} = \frac{\text{Gross Societal Savings}}{\text{Targeted Mobile Patrol Operating Cost}}$$
+
+### 3.5 Maximum Coverage Location Problem (MCLP) Patrol Optimizer
+Police patrol units are positioned to maximize deterrent coverage across ranked hotspots within an effective **1,500m deterrence radius**:
+
+$$\max \sum_{i \in I} w_i y_i \quad \text{subject to} \quad \sum_{j \in J} x_j \le K, \quad y_i \le \sum_{j \in N_i} x_j$$
+
+Where $w_i$ represents hotspot risk score, $x_j \in \{0, 1\}$ indicates unit deployment at site $j$, and $K$ is available mobile units.
 
 ---
 
-## 📁 5. Repository Layout
+## 📁 4. Clean Project Directory Structure
 
 ```text
-.
-├── PRD.md                       # Comprehensive Product Requirements Document
-├── README.md                    # Project documentation and guide
-├── docker-compose.yml           # Single-node Kafka, HDFS & YARN setup
-├── hadoop.env                   # Hadoop & YARN environment variables
-├── requirements.txt             # Python libraries
-├── .github/workflows/
-│   └── deploy-pages.yml         # GitHub Actions workflow for GitHub Pages
-├── ingest/
-│   ├── producer.py              # Ingests & replays STATS19 CSV to Kafka
-│   └── hdfs_sink.py             # Consumes Kafka & writes partitioned HDFS TSVs
-├── mapreduce/
-│   ├── pom.xml                  # Maven dependencies & build packaging
-│   └── src/
-│       ├── main/java/hotspot/
-│       │   ├── Hs.java          # Shared pure helpers and configuration
-│       │   ├── DedupScore.java  # Job 1: Window filter, dedup & scoring
-│       │   ├── Aggregate.java   # Job 2: Cluster aggregation & combiner
-│       │   ├── TopN.java        # Job 3: Global Top-20 ranking
-│       │   └── HotspotDriver.java # 3-stage MapReduce orchestrator
-│       └── test/java/hotspot/
-│           └── HsTest.java      # Unit tests
-├── heatmap/
-│   └── heatmap.py               # Generates Folium heatmap and top20.csv
-├── validate/
-│   └── validate_reference.py    # Independent pandas verification script
-├── scripts/
-│   ├── create_topic.sh          # Sets up Kafka topic & HDFS paths
-│   ├── run_daily.sh             # Executes daily MapReduce and builds map
-│   └── simulate.sh              # Day-by-day continuous replay simulation
-└── site/
-    ├── index.html               # Main interactive heatmap application
-    ├── heatmap_2025-12-31.html  # Dated heatmap report
-    └── top20.csv                # Top 20 ranked hotspots CSV
+bda road/
+├── docker-compose.yml       # Multi-container orchestration (FastAPI, Kafka, HDFS, YARN)
+├── hadoop.env               # Hadoop cluster environment configurations
+├── Makefile                 # Automation commands (build, run, clean)
+├── requirements.txt         # Python dependencies (FastAPI, reportlab, uvicorn, etc.)
+│
+├── frontend/                # React 18 SPA Source (Vite + Vanilla CSS)
+│   ├── src/
+│   │   ├── components/      # UI components (Header, Map, Panels, Tabs, Modals)
+│   │   │   ├── tabs/        # HotspotsTab, TelemetryTab, ForecastTab, EconomicsTab, OpsTab
+│   │   │   └── modals/      # Explainable AI, ROI Simulation Modals
+│   │   ├── utils/           # STATS19 formatters & coordinate decoders
+│   │   ├── App.jsx          # Root application state & SSE stream consumer
+│   │   └── index.css        # Professional design system & responsive layout
+│   ├── public/              # Brand assets & vector SVG favicon
+│   └── vite.config.js       # Production bundler configuration
+│
+├── site/                    # Compiled production web assets (served directly by Docker)
+│   ├── index.html           # Single Page Application entry
+│   ├── app_data.json        # Precomputed Top-20 hotspots & telemetry cache
+│   └── assets/              # Minified production JS/CSS bundles & SVGs
+│
+├── services/                # Backend Microservices & Intelligence Engines
+│   ├── api/
+│   │   └── main.py          # FastAPI application, REST endpoints & SSE streaming
+│   ├── aggregator/          # Real-time window aggregators
+│   ├── enrichment/          # Weather sensitivity & OSM road snapping
+│   ├── ml/                  # Poisson risk forecaster
+│   └── patrol/              # WebTAG economics & MCLP patrol optimizer
+│
+├── mapreduce/               # Apache Hadoop MapReduce Java Job
+│   ├── pom.xml              # Maven configuration
+│   └── src/main/java/hotspot/
+│       └── Hs.java          # 3-stage MapReduce implementation (DedupScore, Aggregate, TopN)
+│
+├── ingest/                  # Streaming Ingest Pipeline
+│   ├── producer.py          # Kafka collision report publisher
+│   └── hdfs_sink.py         # Micro-batch atomic HDFS sink
+│
+├── heatmap/                 # Spatial Clustering & KDE Generator
+│   └── heatmap.py           # Kernel density aggregation script
+│
+├── scripts/                 # Operational & Automation Scripts
+│   ├── prepare_app_data.py  # Generates warm cache and app_data.json
+│   ├── simulate.sh          # Simulates Kafka stream events
+│   └── run_daily.sh         # Executes automated daily MapReduce pipeline
+│
+└── data/                    # UK STATS19 Collision Data
+    └── dft-road-casualty-statistics-collision-last-5-years.csv
 ```
 
 ---
 
-## 🚀 6. Getting Started
+## 🚀 5. Quickstart & How to Run the Platform
 
 ### Prerequisites
-- [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/)
-- [Maven](https://maven.apache.org/) and JDK 8+ (to package MapReduce JAR)
-- Python 3.10+ (if running scripts directly on host)
+- **Docker** and **Docker Compose**
+- **Node.js 18+** & **npm** (for modifying frontend, optional since pre-built bundle is in `site/`)
+- **Python 3.11**
 
-### 1. Build the MapReduce JAR
-```bash
-mvn -f mapreduce/pom.xml clean package
-```
-
-### 2. Start the Cluster
+### Step 1: Start the Full Big Data Stack
 ```bash
 docker compose up -d
-./scripts/create_topic.sh
 ```
+This initializes:
+- `kafka:9092` — Apache Kafka 3.7.0 event broker
+- `namenode:9870` — Apache Hadoop HDFS NameNode
+- `resourcemanager:8088` — Apache Hadoop YARN ResourceManager
+- `app:8000` — FastAPI Application & React Production Web Server
 
-### 3. Start the Kafka-to-HDFS Sink
-```bash
-docker compose exec -d app python ingest/hdfs_sink.py
-```
-
-### 4. Replay Collision Data to Kafka
-```bash
-# Replay 90-day window ending on 2025-12-31:
-docker compose exec app python ingest/producer.py \
-   --csv data/dft-road-casualty-statistics-collision-last-5-years.csv \
-   --from 2025-10-03 --to 2025-12-31
-```
-
-### 5. Run Daily MapReduce Ranking & Build Heatmap
-```bash
-./scripts/run_daily.sh 2025-12-31
-```
-
-### 6. View the Heatmap
-Open `http://localhost:8000/` or inspect [`site/index.html`](file:///Users/lokesh/Desktop/bda%20road/site/index.html).
-
-### 7. Run Verification Test
-```bash
-docker compose exec app python validate/validate_reference.py \
-   --csv data/dft-road-casualty-statistics-collision-last-5-years.csv \
-   --asof 2025-12-31
-```
-Output:
+### Step 2: Open the Web Application
+Open your web browser and navigate to:
 ```text
-# 1 ref    2575:-7 DAY        24.827 n= 24 | mr    2575:-7 DAY        24.826 n= 24 | OK
-# 2 ref    2575:-8 DAY        22.140 n= 19 | mr    2575:-8 DAY        22.140 n= 19 | OK
-...
-#20 ref   2687:-18 DAY        12.981 n= 13 | mr   2687:-18 DAY        12.981 n= 13 | OK
-PASS
+http://localhost:8000/
 ```
 
 ---
@@ -218,5 +209,35 @@ This repository is pre-configured for instant GitHub Pages deployment via **GitH
 
 ---
 
-## 📜 License
-This project uses road safety data under the **UK Open Government Licence (OGL v3.0)** published by the Department for Transport.
+## 📡 6. Key REST & Streaming API Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/v1/healthz` | `GET` | Cluster and microservice health status |
+| `/api/v1/stream` | `GET` | Real-time Server-Sent Events (SSE) emitting clock, ticker, and top20 updates |
+| `/api/v1/stats` | `GET` | 90-day window collision volume, severity totals, and ingest rate |
+| `/api/v1/h3/cells` | `GET` | Uber H3 Hexagonal Grid indices (Resolution 8) with incident densities |
+| `/api/v1/predictions/risk` | `GET` | 7-day Poisson ML forward risk projections by road corridor |
+| `/api/v1/economics/summary` | `GET` | UK DfT WebTAG societal casualty valuation breakdown |
+| `/api/v1/economics/simulate-roi` | `GET` | Dynamic BCR calculations based on user casualty reduction slider |
+| `/api/v1/economics/business-case.pdf` | `GET` | Dynamic generation of official PCC Executive Business Case PDF |
+| `/api/v1/patrol/manifest` | `GET` | MCLP optimal police patrol dispatch schedule (JSON or GPX format) |
+| `/api/v1/export/top20.csv` | `GET` | Direct CSV export of current Top-20 ranked hotspots |
+| `/api/v1/export/top20.geojson` | `GET` | GeoJSON FeatureCollection export for GIS tools (QGIS, ArcGIS) |
+
+---
+
+## 🎓 7. Evaluation & Teacher Presentation Guide
+
+When presenting this project to evaluators or professors, highlight these architectural achievements:
+
+1. **Lambda Architecture Realization**:
+   - Explain how **Hadoop MapReduce** provides mathematically rigorous, fault-tolerant batch deduplication over 90 rolling days.
+   - Contrast this with the **Speed Layer** where **Kafka** streams incoming collision micro-events directly to web clients via Server-Sent Events (SSE) with sub-second latency.
+2. **Elimination of Static Aggregations**:
+   - The platform treats **time as a first-class citizen**. The virtual clock advances, past accidents decay by half-life ($0.5^{\Delta t / 30}$), and hotspots dynamically shift based on diurnal commute patterns.
+3. **Actionable Civic Value (Vision Zero)**:
+   - Emphasize that the system does not just show "dots on a map"—it translates raw statistics into **monetary public value** (UK DfT WebTAG) and gives police commanders **patrol dispatch GPS waypoints (GPX)** and downloadable **executive PDFs** ready for public safety meetings.
+4. **Resilience & Fault Tolerance**:
+   - Kafka offset management with atomic HDFS staging prevents duplicate counting.
+   - Clean microservice separation ensures frontend operability even during batch maintenance cycles.
