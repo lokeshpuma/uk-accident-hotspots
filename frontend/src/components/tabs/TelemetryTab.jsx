@@ -19,13 +19,13 @@ export default function TelemetryTab({
       <div className="page-header-row">
         <div>
           <div className="page-title">
-            <span>⚡ Live Ingest Telemetry & Kafka Stream Monitor</span>
-            <span className={`replay-tag ${isLiveApi ? 'live' : ''}`}>
-              {isLiveApi ? 'LIVE API (STREAMING) 🟢' : 'REPLAY SIMULATION'}
+            <span>⚡ Ingest Telemetry & Collision Stream Monitor</span>
+            <span className={`replay-tag ${isLiveApi ? 'live' : ''}`} style={{ background: isLiveApi ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.15)', color: isLiveApi ? '#10b981' : '#f59e0b', border: isLiveApi ? '1px solid #10b981' : '1px solid #f59e0b' }}>
+              {isLiveApi ? 'CONNECTED BACKEND 🟢' : 'SIMULATED REPLAY (Historical STATS19)'}
             </span>
           </div>
           <div className="page-subtitle">
-            Real-time STATS19 collision event ingest from Kafka topic <code>accident-reports</code> &middot; Synchronized with Virtual Clock <strong style={{ color: '#38bdf8' }}>{virtualTs || '2025-12-31 17:42'}</strong> &middot; Updating top-of-stack in real-time.
+            Historical STATS19 collision event stream replayed along simulated timeline &middot; Synchronized with Virtual Clock <strong style={{ color: '#38bdf8' }}>{virtualTs || '2025-12-31 17:42'}</strong> &middot; Real-time top-of-stack updates with sub-second latency.
           </div>
         </div>
 

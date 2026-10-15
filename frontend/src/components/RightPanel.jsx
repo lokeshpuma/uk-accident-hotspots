@@ -71,11 +71,11 @@ export default function RightPanel({
         id="tab-stream"
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px 6px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>
-            Real-time Ingest Feed (Kafka)
+          <span style={{ fontSize: '10px', fontWeight: 700, color: '#f59e0b', letterSpacing: '0.03em' }} title="Historical STATS19 collision records replayed along simulated timeline">
+            SIMULATED REPLAY (Historical STATS19)
           </span>
           <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 700 }}>
-            Streaming
+            ● Active
           </span>
         </div>
 

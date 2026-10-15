@@ -11,6 +11,9 @@ import os
 import sys
 import json
 import asyncio
+import socket
+import ipaddress
+from urllib.parse import urlparse
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Any, Optional
 
@@ -35,6 +38,47 @@ from services.enrichment.osm import OsmInfrastructureEngine, XaiDiagnosticEngine
 from services.ml.predict import RISK_PREDICTOR
 from services.patrol.dispatch import PATROL_ENGINE
 
+# Security Helper: CSV Formula Injection Defense (PRD Section 11.4)
+def sanitize_csv_cell(val: Any) -> str:
+    s = str(val) if val is not None else ""
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        s = f"'{s}"
+    if any(c in s for c in (',', '"', '\n', '\r')):
+        s = s.replace('"', '""')
+        return f'"{s}"'
+    return s
+
+# Security Helper: SSRF Webhook URL Validation (PRD Section 11.3)
+def is_safe_webhook_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        
+        # Disallow localhost / local names directly
+        if hostname.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+
+        addr_info = socket.getaddrinfo(hostname, None)
+        for item in addr_info:
+            ip_str = item[4][0]
+            ip = ipaddress.ip_address(ip_str)
+            if (
+                ip.is_loopback
+                or ip.is_private
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_unspecified
+            ):
+                return False
+        return True
+    except Exception:
+        return False
+
 app = FastAPI(
     title="HotspotWatch API",
     description="Real-Time Interactive Road Accident Hotspot Detection & Intelligence Platform (PRD_v2)",
@@ -43,11 +87,11 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Enable CORS for cross-origin or local dev requests
+# Enable restricted CORS without wildcard credentials (PRD Section 11.1)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -288,7 +332,19 @@ def export_top20_csv():
     top20 = PRELOADED_DATA.get("top20", [])
     csv_rows = ["rank,cell,band,score,collisions,lat,lon,fatal,serious,slight"]
     for h in top20:
-        csv_rows.append(f"{h['rank']},{h['cell']},{h['band']},{h['score']},{h['collisions']},{h['lat']},{h['lon']},{h['fatal']},{h['serious']},{h['slight']}")
+        row = [
+            sanitize_csv_cell(h.get('rank')),
+            sanitize_csv_cell(h.get('cell')),
+            sanitize_csv_cell(h.get('band')),
+            sanitize_csv_cell(round(float(h.get('score', 0)), 2)),
+            sanitize_csv_cell(h.get('collisions')),
+            sanitize_csv_cell(h.get('lat')),
+            sanitize_csv_cell(h.get('lon')),
+            sanitize_csv_cell(h.get('fatal', 0)),
+            sanitize_csv_cell(h.get('serious', 0)),
+            sanitize_csv_cell(h.get('slight', 0))
+        ]
+        csv_rows.append(",".join(row))
     return Response(content="\n".join(csv_rows), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=top20.csv"})
 
 
@@ -361,18 +417,21 @@ def get_economics_summary():
     return EconomicsEngine.evaluate_hotspots(top20)
 
 
-@app.post("/api/v1/economics/simulate-roi")
-def simulate_roi(req: RoiSimulationRequest):
+@app.api_route("/api/v1/economics/simulate-roi", methods=["GET", "POST"])
+def simulate_roi(req: Optional[RoiSimulationRequest] = None, target_reduction_pct: Optional[float] = None):
     """Add-on 18.4: Vision Zero ROI Simulator."""
     top20 = PRELOADED_DATA.get("top20", [])
+    reduction = target_reduction_pct if target_reduction_pct is not None else (req.reduction_pct if req else 20.0)
+    patrol_hours = req.patrol_hours if req else 400.0
+    cost_per_hour = req.cost_per_hour if req else 45.0
     targets = top20
-    if req.target_ranks:
+    if req and req.target_ranks:
         targets = [h for h in top20 if h.get("rank") in req.target_ranks]
     return EconomicsEngine.simulate_roi(
         target_hotspots=targets,
-        reduction_pct=req.reduction_pct,
-        patrol_hours=req.patrol_hours,
-        cost_per_hour=req.cost_per_hour
+        reduction_pct=reduction,
+        patrol_hours=patrol_hours,
+        cost_per_hour=cost_per_hour
     )
 
 
@@ -590,7 +649,13 @@ def get_navigation_geojson():
 
 @app.post("/api/v1/alerts/webhooks")
 def register_webhook(req: WebhookRegistrationRequest):
-    """Add-on 18.8: Register Webhook for acute alerts."""
+    """Add-on 18.8: Register Webhook for acute alerts with SSRF defense (PRD Section 11.3)."""
+    if not is_safe_webhook_url(req.url):
+        raise HTTPException(
+            status_code=400,
+            detail="Forbidden webhook URL: Target resolves to loopback, private RFC-1918, link-local, or invalid destination."
+        )
+
     item = {
         "id": f"wh-{len(REGISTERED_WEBHOOKS) + 1:04d}",
         "url": req.url,

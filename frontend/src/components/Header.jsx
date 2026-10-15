@@ -25,6 +25,9 @@ export default function Header({
   isDarkMode,
   onToggleTheme,
   onExport,
+  onOpenUpload,
+  isCustomDataset,
+  onResetDataset,
 }) {
   return (
     <header className="app-header">
@@ -133,12 +136,34 @@ export default function Header({
           <span id="theme-icon">{isDarkMode ? '☀️ Light' : '🌙 Dark'}</span>
         </button>
 
+        {/* Dataset Controls: Reset or Upload */}
+        {isCustomDataset && (
+          <button
+            className="btn"
+            onClick={onResetDataset}
+            title="Reset to official STATS19 UK dataset"
+            style={{ borderColor: '#f59e0b', color: '#f59e0b', fontSize: '11px' }}
+          >
+            <span>↺ Reset Dataset</span>
+          </button>
+        )}
+
+        <button
+          className="btn"
+          id="btn-upload"
+          onClick={onOpenUpload}
+          title="Upload Custom CSV or Load Synthetic Sample"
+          style={{ borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
+        >
+          <span>📁 Upload CSV</span>
+        </button>
+
         {/* Export Button */}
         <button
           className="btn primary"
           id="btn-export"
           onClick={onExport}
-          title="Export Top 20 Hotspots"
+          title="Export Top Hotspots, GeoJSON, or Collision CSV"
         >
           <span>⬇ Export</span>
         </button>

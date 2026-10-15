@@ -9,6 +9,8 @@ import TelemetryTab from './components/tabs/TelemetryTab';
 import ForecastTab from './components/tabs/ForecastTab';
 import EconomicsTab from './components/tabs/EconomicsTab';
 import OpsTab from './components/tabs/OpsTab';
+import DatasetUploadModal from './components/modals/DatasetUploadModal';
+import ExportModal from './components/modals/ExportModal';
 
 export default function App() {
   // Theme State (Dark by default, toggles light-mode on body)
@@ -19,6 +21,10 @@ export default function App() {
 
   // App Data & Live State
   const [appData, setAppData] = useState(null);
+  const originalAppData = useRef(null);
+  const [activeDatasetName, setActiveDatasetName] = useState('STATS19 Official UK');
+  const [customValidationReport, setCustomValidationReport] = useState(null);
+  const [rawCollisions, setRawCollisions] = useState([]);
   const [isLiveApi, setIsLiveApi] = useState(false);
   const [stats, setStats] = useState({
     total_window_collisions: 25642,
@@ -34,6 +40,10 @@ export default function App() {
     virtualTsRef.current = virtualTs;
   }, [virtualTs]);
 
+  // Modals state
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
   // Playback & Simulation State
   const [isPlaying, setIsPlaying] = useState(true);
   const [speed, setSpeed] = useState(10);
@@ -42,6 +52,7 @@ export default function App() {
   // Filters & Modes
   const [selectedBand, setSelectedBand] = useState('ALL');
   const [selectedSeverity, setSelectedSeverity] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
   const [normMode, setNormMode] = useState('sqrt');
   const [h3Mode, setH3Mode] = useState(false);
   const [forecastMode, setForecastMode] = useState(false);
@@ -97,6 +108,7 @@ export default function App() {
           const data = await res.json();
           if (!isCancelled) {
             setAppData(data);
+            originalAppData.current = data;
             const list = data.top20 || data.hotspots || [];
             if (list.length > 0) {
               setSelectedHotspot(list[0]);
@@ -223,14 +235,55 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isPlaying, speed, appData]);
 
-  // Handle Export
-  const handleExport = () => {
-    const choice = confirm('Click OK for CSV Export.\nClick Cancel for GeoJSON Export.');
-    if (choice) {
-      window.open('/api/v1/export/top20.csv', '_blank');
-    } else {
-      window.open('/api/v1/export/top20.geojson', '_blank');
+  // Handle Clear Filters (PRD Section 5.8)
+  const handleClearFilters = () => {
+    setSelectedBand('ALL');
+    setSelectedSeverity('ALL');
+    setSearchQuery('');
+  };
+
+  // Handle Apply Custom Uploaded Dataset or Synthetic Sample
+  const handleApplyDataset = ({ name, payload, rawRows, validationReport }) => {
+    setAppData(payload);
+    setActiveDatasetName(name);
+    setCustomValidationReport(validationReport);
+    if (rawRows && rawRows.length > 0) {
+      setRawCollisions(rawRows);
     }
+    if (payload.stats) {
+      setStats((prev) => ({
+        ...prev,
+        total_window_collisions: payload.stats.total_collisions || prev.total_window_collisions,
+        fatal: payload.stats.fatal || prev.fatal,
+        serious: payload.stats.serious || prev.serious,
+        slight: payload.stats.slight || prev.slight,
+      }));
+    }
+    const list = payload.top20 || payload.hotspots || [];
+    if (list.length > 0) {
+      setSelectedHotspot(list[0]);
+    }
+    setIsUploadModalOpen(false);
+  };
+
+  // Handle Reset to Default STATS19 Dataset
+  const handleResetDataset = () => {
+    if (originalAppData.current) {
+      setAppData(originalAppData.current);
+      setActiveDatasetName('STATS19 Official UK');
+      setCustomValidationReport(null);
+      setRawCollisions([]);
+      const list = originalAppData.current.top20 || originalAppData.current.hotspots || [];
+      if (list.length > 0) setSelectedHotspot(list[0]);
+      if (originalAppData.current.stats) {
+        setStats(originalAppData.current.stats);
+      }
+    }
+  };
+
+  // Handle Export: Open Safe Multi-Format Export Modal (PRD Section 5.10 & 11.4)
+  const handleExport = () => {
+    setIsExportModalOpen(true);
   };
 
   // Hotspot selection handler (immediately flies to hotspot on map)
@@ -267,6 +320,9 @@ export default function App() {
         isDarkMode={isDarkMode}
         onToggleTheme={handleToggleTheme}
         onExport={handleExport}
+        onOpenUpload={() => setIsUploadModalOpen(true)}
+        isCustomDataset={activeDatasetName !== 'STATS19 Official UK'}
+        onResetDataset={handleResetDataset}
       />
 
       {/* Map Viewport (Always kept in DOM so Leaflet preserves tile cache) */}
@@ -284,7 +340,7 @@ export default function App() {
           pulseQueue={pulseQueue}
         />
 
-        {/* Left Sidebar: Top 20 Ranked Hotspot List */}
+        {/* Left Sidebar: Top Ranked Hotspot List */}
         <LeftPanel
           hotspots={currentHotspots}
           selectedBand={selectedBand}
@@ -295,6 +351,11 @@ export default function App() {
           onChangeNorm={setNormMode}
           selectedHotspot={selectedHotspot}
           onSelectHotspot={handleSelectHotspot}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onClearFilters={handleClearFilters}
+          activeDatasetName={activeDatasetName}
+          onOpenUpload={() => setIsUploadModalOpen(true)}
         />
 
         {/* Right Sidebar: Live Stream & Hotspot Detail Inspector */}
@@ -342,6 +403,23 @@ export default function App() {
 
       {/* Tab 6: Dedicated Pipeline Health & System Ops */}
       {activeMainTab === 'ops' && <OpsTab />}
+
+      {/* Upload CSV & Schema Mapping Modal (PRD Sections 5.2 - 5.5, 6.3) */}
+      <DatasetUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onApplyDataset={handleApplyDataset}
+      />
+
+      {/* Safe Multi-Format Export Modal (PRD Section 5.10 & 11.4) */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        hotspots={currentHotspots}
+        rawCollisions={rawCollisions}
+        datasetName={activeDatasetName}
+        validationReport={customValidationReport}
+      />
     </div>
   );
 }
