@@ -205,7 +205,7 @@ This repository is pre-configured for instant GitHub Pages deployment via **GitH
 2. In your GitHub repository:
    - Navigate to **Settings** > **Pages**.
    - Under **Build and deployment** > **Source**, select **GitHub Actions** (or select **Deploy from a branch** and choose `gh-pages`).
-3. The interactive map will be live at: [https://lokeshpuma.github.io/Road-Accident-Hotspot-Detection/](https://lokeshpuma.github.io/Road-Accident-Hotspot-Detection/)
+3. The interactive map will be live at: [lokeshpuma.github.io/uk-accident-hotspots/](lokeshpuma.github.io/uk-accident-hotspots/)
 
 ---
 
